@@ -1,0 +1,64 @@
+---
+- name: Deploy blogging application to Nginx server
+  hosts: webservers
+  become: yes
+
+  vars:
+    app_name: blog_app
+    document_root: /var/www
+    app_root: "{{ document_root }}/{{ app_name }}"
+    server_name: "{{ ansible_default_ipv4.address }}"
+
+  tasks:
+    - name: Install Nginx
+      apt:
+        name: nginx
+        state: present
+        update_cache: yes
+
+    - name: Create application root directory
+      file:
+        path: "{{ app_root }}"
+        state: directory
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Copy application files
+      copy:
+        src: ./blog_app/
+        dest: "{{ app_root }}/"
+        owner: www-data
+        group: www-data
+        mode: '0755'
+
+    - name: Deploy Nginx site configuration
+      template:
+        src: ./templates/nginx.conf.j2
+        dest: /etc/nginx/sites-available/{{ app_name }}.conf
+      notify: Restart Nginx
+
+    - name: Enable site
+      file:
+        src: /etc/nginx/sites-available/{{ app_name }}.conf
+        dest: /etc/nginx/sites-enabled/{{ app_name }}.conf
+        state: link
+      notify: Restart Nginx
+
+    - name: Remove default Nginx site
+      file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      notify: Restart Nginx
+
+    - name: Ensure Nginx is running
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted
